@@ -1,5 +1,5 @@
 {
-  "name": "cosmalore-router",
+  "name": "cosmalore-fa-site",
   "compatibility_date": "2024-09-23",
   "main": "src/worker-entry.js",
   "assets": {
