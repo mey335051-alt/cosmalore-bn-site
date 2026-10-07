@@ -1,0 +1,973 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import ArticleCard from "../components/ArticleCard.astro";
+import ReferencePopup from "../components/ReferencePopup.astro";
+import { getAllPosts, getRelatedPosts, getRandomPosts } from "../lib/wp.js";
+import { parseReferences } from "../lib/parse-references.js";
+import { JUBNA_WIDGET_ID, JUBNA_INARTICLE_WIDGET_ID, ADS_ENABLED } from "../lib/config.js";
+import { injectInArticleAds } from "../lib/inject-ads.js";
+
+// موقع build، برای هر مقاله‌ی وردپرس یه صفحه‌ی استاتیک ساخته می‌شه.
+// posts رو همینجا به‌عنوان props می‌فرستیم تا مجبور نباشیم برای هر
+// مقاله دوباره از وردپرس بخوایمش (قبلاً هر مقاله یه درخواست جدا برای
+// خودش + ۲ درخواست برای «مرتبط»/«تصادفی» می‌زد — الان صفر درخواست
+// اضافه، همه از همین یه لیست مشترک محاسبه می‌شه).
+//
+// نکته‌ی مهم: از [...path] (نه [slug]) استفاده می‌کنیم چون آدرس واقعی
+// هر مقاله توی وردپرس چند بخشیه (مثل bn/2026/08/28/اسلاگ)، نه یه
+// بخش تخت. این باعث می‌شه آدرس‌های سایت جدید دقیقاً با آدرس‌های فعلی
+// وردپرس یکی باشن — سئو/بک‌لینک/بوکمارک قدیمی از بین نمی‌ره.
+export async function getStaticPaths() {
+  const posts = await getAllPosts();
+  return posts
+    .filter((post) => post.path) // مقالاتی که raw.link نامعتبر بود (path=null) رد می‌شن
+    .map((post) => ({
+      params: { path: post.path },
+      props: { post, allPosts: posts },
+    }));
+}
+
+const { post, allPosts } = Astro.props;
+
+const { html: parsedContent, references } = parseReferences(post.content);
+// فقط جدول‌های واقعاً عریض (بیش از ۲ ستون، مثل جدول فیلموگرافی) باید
+// اسکرول‌شونده بشن. جدول‌های دو ستونه (مثل صندوق معلومات/infobox که
+// هرچند ردیف داره ولی همیشه فقط «برچسب / مقدار» است) باید عادی و بدون
+// اسکرول بمونن — تعداد ستون از روی اولین ردیف <tr> هر جدول شمرده می‌شه.
+function wrapWideTables(html) {
+  return html.replace(/<table\b[^>]*>[\s\S]*?<\/table>/gi, (tableHtml) => {
+    // بعضی جدول‌ها ردیف اول‌شون (مثلاً یه تیتر بخش با colspan) ستون کمتری
+    // از ردیف‌های داده‌ی واقعی‌شون داره؛ برای همین بیشترین تعداد ستون
+    // در بین همه‌ی ردیف‌ها رو حساب می‌کنیم، نه فقط ردیف اول.
+    const rows = tableHtml.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [tableHtml];
+    const maxColumns = Math.max(...rows.map((row) => (row.match(/<t[dh]\b/gi) || []).length));
+    return maxColumns > 2 ? `<div class="table-scroll">${tableHtml}</div>` : tableHtml;
+  });
+}
+const cleanContent = wrapWideTables(parsedContent);
+
+// نقشه‌های OpenStreetMap تنها iframe داخل مقاله‌ها هستند و سنگین‌ترین
+// عضو صفحه‌اند (شبکه + جاوااسکریپت + رندر یک صفحه‌ی کامل دیگر) — قبلاً
+// همون لحظه‌ی اول بارگذاری می‌شدن، برای همینه که TBT/LCP مقالات
+// نقشه‌دار این‌قدر بد بود. الان src واقعی توی data-src می‌مونه و فقط با
+// همون تپِ «ইন্টারঅ্যাক্ট করতে ট্যাপ করুন» (یا زدن یکی از دکمه‌های زوم) واقعاً لود می‌شه.
+//
+// پیش‌نمایش قبل از تعامل: نسخه‌ی اول یه tile واقعی از خودِ
+// tile.openstreetmap.org می‌گرفت، ولی اون سرویس برای استفاده‌ی خودکار
+// و حجم بالا معمولاً محدودیت/مسدودسازی داره و بدون هیچ خطای قابل‌دیدن
+// فقط خالی می‌مونه — دقیقاً همون جعبه‌ی خاکستری که می‌دیدیم. به‌جاش الان
+// یه تصویر تزئینی محلی (public/map-preview.svg، خطوط توپوگرافی
+// انتزاعی) استفاده می‌شه که هیچ وابستگی به شبکه‌ی بیرونی نداره — همیشه
+// و برای همه‌ی نقشه‌ها بدون خطا نمایش داده می‌شه.
+function enhanceGeoMaps(html) {
+  return html.replace(
+    /<iframe\b([^>]*?)\ssrc=["']([^"']*openstreetmap\.org[^"']*)["']([^>]*)>/gi,
+    (_match, preAttrs, src, postAttrs) =>
+      `<div class="csm-map-preview" aria-hidden="true"><span class="csm-map-pin">📍</span></div><iframe${preAttrs} data-src="${src}" src="about:blank"${postAttrs}>`
+  );
+}
+// یادداشت‌های منهجی (که الان با لفظ عمومی «টীকা» نشون داده می‌شن، نه
+// «টীকা») قبلاً به‌صورت
+// <sup class="note"><a href="#" title="متن طولانی">[*]</a></sup> نوشته
+// می‌شدن. این‌جا هر کدوم یه شماره‌ی ترتیبی و یه id می‌گیرن (درست مثل
+// منابع)، متن‌شون توی یه آرایه جمع می‌شه تا بعداً یه فهرست «টীকা»
+// زیر «সূত্র ও তথ্যসূত্র» ساخته بشه، و خودِ نشانگر توی متن فقط همون
+// دایره‌ی «i» می‌مونه — متن واقعی دیگه اینجا inline نیست، با کلیک از
+// همون آرایه (که به ReferencePopup پاس داده می‌شه) خونده می‌شه.
+const collectedNotes = [];
+function transformNotes(html) {
+  let n = 0;
+  return html.replace(
+    /<sup class="note"><a href="#" title="([^"]*)">\[\*\]<\/a><\/sup>/g,
+    (_match, noteText) => {
+      n += 1;
+      const occId = `noteOcc-${n}`;
+      collectedNotes.push({ n, text: noteText, occId });
+      return `<sup class="note"><button type="button" class="note-marker" id="${occId}" data-note="${n}" aria-label="টীকা">i</button></sup>`;
+    }
+  );
+}
+const deferredContent = transformNotes(enhanceGeoMaps(cleanContent));
+// تبلیغ‌های درون‌مقاله‌ای (جبنا) — آخرین مرحله‌ی پردازش HTML، تا هیچ‌کدام از
+// تبدیل‌های بالا (منابع، یادداشت‌ها، جدول‌ها) با شمارش پاراگراف‌ها تداخل نکند.
+// فهرست مطالب (tocItems) از همان deferredContent ساخته می‌شود؛ تبلیغ h2 ندارد.
+const articleHtml = ADS_ENABLED
+  ? injectInArticleAds(deferredContent, { widgetId: JUBNA_INARTICLE_WIDGET_ID })
+  : deferredContent;
+
+// فهرست مطالب: از همون <h2 id="..."> هایی که داخل محتوا هست ساخته
+// می‌شه (نیازی به منبع جدا نیست). اگه کمتر از دو تیتر باشه، فهرست
+// اصلاً نمایش داده نمی‌شه (بی‌فایده‌ست).
+const tocItems = [...deferredContent.matchAll(/<h2[^>]*\sid=["']([^"']+)["'][^>]*>([\s\S]*?)<\/h2>/gi)].map(
+  ([, id, inner]) => ({ id, text: inner.replace(/<[^>]+>/g, "").trim() })
+);
+
+// تاریخ انتشار (post.date از wp.js همیشه موجوده — قبلاً فقط توی
+// jsonLd/SEO استفاده می‌شد و به‌صورت قابل‌دیدن به خواننده نشون داده
+// نمی‌شد). اینجا به فرمت عربی خوانا تبدیلش می‌کنیم.
+function formatBengaliDate(isoDate) {
+  try {
+    return new Date(isoDate).toLocaleDateString("bn-BD", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return isoDate;
+  }
+}
+
+const related = getRelatedPosts(allPosts, post.categoryId, post.id, 4);
+const more = getRandomPosts(allPosts, post.id, 6);
+
+// نکته: باید دقیقاً هم‌شکل با <link rel="canonical"> واقعی صفحه باشه
+// (که در BaseLayout.astro از Astro.url.pathname ساخته می‌شه و همیشه
+// اسلش پایانی داره)، وگرنه داده‌ی ساختاریافته (JSON-LD) یه آدرس دیگه
+// از خودِ صفحه رو معرفی می‌کنه.
+const canonicalURL = new URL(post.path + "/", Astro.site).href;
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  headline: post.title,
+  description: post.excerpt,
+  image: post.image ? [post.image] : undefined,
+  datePublished: post.date,
+  mainEntityOfPage: { "@type": "WebPage", "@id": canonicalURL },
+  author: { "@type": "Organization", name: "Cosmalore" },
+  publisher: { "@type": "Organization", name: "Cosmalore" },
+};
+---
+
+<BaseLayout title={post.title} description={post.excerpt} ogImage={post.image || undefined}>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} slot="head" />
+  <article class="article-page">
+    {post.image && (
+      <div class="img-wrap article-hero">
+        <img
+          src={post.image}
+          srcset={post.imageSrcset || undefined}
+          sizes="(max-width: 760px) calc(100vw - 48px), 712px"
+          alt={post.imageAlt || post.title}
+          width="1200"
+          height="600"
+          loading="eager"
+          fetchpriority="high"
+          decoding="async"
+        />
+      </div>
+    )}
+
+    <div class="article-header">
+      {post.category && <span class="article-category">{post.category.name}</span>}
+      <h1 class="article-title">{post.title}</h1>
+      {post.excerpt && <p class="article-excerpt">{post.excerpt}</p>}
+      <div class="article-meta-row">
+        <span class="article-date">
+          <span aria-hidden="true">📅</span>
+          <time datetime={post.date}>{formatBengaliDate(post.date)}</time>
+        </span>
+      </div>
+      <div class="article-actions">
+        <button type="button" id="saveBtn" class="action-btn" data-post-id={post.id}>
+          💾 <span>সংরক্ষণ</span>
+        </button>
+        <button type="button" id="shareBtn" class="action-btn">
+          🔗 <span>শেয়ার</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="article-body" set:html={articleHtml} />
+
+    {tocItems.length > 0 && (
+      <div class="mini-toc" id="miniToc">
+        <button type="button" id="tocBtn" class="mini-toc-btn" aria-label="সূচিপত্র ও পড়ার অগ্রগতি">
+          <svg viewBox="0 0 44 44" width="44" height="44" aria-hidden="true">
+            <circle class="mini-toc-track" cx="22" cy="22" r="18"></circle>
+            <circle class="mini-toc-ring" id="tocRing" cx="22" cy="22" r="18"></circle>
+          </svg>
+          <span class="mini-toc-pct" id="tocPct">০%</span>
+        </button>
+        <div class="mini-toc-pop" id="tocPop" role="dialog" aria-label="সূচিপত্র">
+          <div class="mini-toc-pop-head">
+            <span>নিবন্ধের সূচি</span>
+            <span class="mini-toc-pop-pct" id="tocPopPct">০%</span>
+          </div>
+          <ol class="toc-list">
+            {tocItems.map((h) => (
+              <li><a href={`#${h.id}`} class="toc-link" data-target={h.id}>{h.text}</a></li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    )}
+
+    <ReferencePopup references={references} notes={collectedNotes} />
+
+    <!-- ویجت تبلیغات ناتیو جبنا — پایین مقاله، قبل از «সম্পর্কিত নিবন্ধ».
+         async است پس رندر صفحه رو بلاک نمی‌کنه؛ min-height هم برای
+         جلوگیری از پرش چیدمان (CLS) وقتی ویجت لود می‌شه رزرو شده. */ -->
+    {ADS_ENABLED && (
+      <>
+        <div class="jubna-ad-slot">
+          <div class="JC-WIDGET-DMROOT" data-widget-id={JUBNA_WIDGET_ID}></div>
+        </div>
+        <script type="text/javascript" async data-astro-rerun src="https://static.jubnaadserve.com/api/widget.js"></script>
+      </>
+    )}
+
+    {related.length > 0 && (
+      <section class="related-section">
+        <h2>সম্পর্কিত নিবন্ধ</h2>
+        <div class="article-grid">
+          {related.map((r) => (
+            <ArticleCard
+              slug={r.slug}
+              path={r.path}
+              title={r.title}
+              excerpt={r.excerpt}
+              category={r.category?.name}
+              image={r.image}
+              imageSrcset={r.imageSrcset}
+            />
+          ))}
+        </div>
+      </section>
+    )}
+
+    {more.length > 0 && (
+      <section class="more-section">
+        <h2>আরও নিবন্ধ</h2>
+        <div class="article-grid">
+          {more.map((m) => (
+            <ArticleCard
+              slug={m.slug}
+              path={m.path}
+              title={m.title}
+              excerpt={m.excerpt}
+              category={m.category?.name}
+              image={m.image}
+              imageSrcset={m.imageSrcset}
+            />
+          ))}
+        </div>
+      </section>
+    )}
+  </article>
+</BaseLayout>
+
+<style>
+  .article-page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: var(--space-5);
+  }
+  .article-hero {
+    width: 100%;
+    aspect-ratio: 2 / 1;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-5);
+  }
+  @media (max-width: 480px) {
+    .article-hero {
+      aspect-ratio: 4 / 3;
+      border-radius: var(--radius-sm);
+    }
+  }
+  .article-category {
+    display: inline-block;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: #fff;
+    background: var(--color-accent-2);
+    padding: 2px var(--space-3);
+    border-radius: 999px;
+    margin-bottom: var(--space-3);
+  }
+  .article-title {
+    font-size: var(--text-2xl);
+    line-height: var(--line-tight);
+    color: var(--color-ink);
+    margin: 0 0 var(--space-4);
+  }
+  /* توضیح مختصر (excerpt) زیر عنوان — عمداً شبیه بدنه‌ی معمولی مقاله
+     نیست: قاب رنگی سمت راست + پس‌زمینه‌ی ملایم پنل + فونت کمی بزرگ‌تر
+     و ایتالیک، مثل یه «چکیده»/دیباچه‌ی دانشنامه‌ای، تا از همون نگاه
+     اول از متن اصلی مقاله جدا دیده بشه. */
+  .article-excerpt {
+    margin: var(--space-4) 0 0;
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-panel);
+    border-inline-start: 3px solid var(--color-accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: var(--text-base);
+    font-style: italic;
+    color: var(--color-muted);
+    line-height: var(--line-loose);
+  }
+  .article-meta-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-top: var(--space-3);
+  }
+  .article-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+  }
+  .article-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-4);
+    margin-top: var(--space-4);
+    border-bottom: 1px solid var(--color-hairline);
+    position: relative;
+  }
+  /* میله‌ی کوتاه برنزی انتهای جداکننده — همان «گزینه‌ی سه»ی تاییدشده،
+     به‌جای یک خط ساده‌ی یک‌دست. */
+  .article-actions::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 0;
+    bottom: -1px;
+    width: 44px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--color-accent);
+  }
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-4);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+  .action-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  .action-btn.is-saved { color: var(--color-accent); border-color: var(--color-accent); }
+
+  .article-body {
+    font-size: var(--text-base);
+    line-height: var(--line-normal);
+    color: var(--color-ink);
+  }
+  .article-body :global(h2) { font-size: var(--text-xl); margin-top: var(--space-7); }
+  .article-body :global(h3) { font-size: var(--text-lg); margin-top: var(--space-6); }
+  .article-body :global(p) { margin: var(--space-4) 0; }
+  .article-body :global(img) {
+    max-width: 100%;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+  /* ایموجی‌های خودِ وردپرس (📍 🌐 👥 و غیره، همه با کلاس emoji) قبلاً
+     غول‌پیکر و بی‌قاعده نمایش داده می‌شدن، چون یک قانون اصلی خودِ
+     هسته‌ی وردپرس (که همیشه این‌ها رو ۱em/۱em می‌کند) توی این فرانت‌اند
+     headless هیچ‌وقت لود نمی‌شد — این‌جا از نو ساختیمش. باید از قانون
+     عمومی img بالا override بشه (بدون گرد بودن، بدون سایه، بدون
+     max-width درصدی). */
+  .article-body :global(img.emoji) {
+    width: 1em;
+    height: 1em;
+    margin: 0 0.07em;
+    vertical-align: -0.1em;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    max-width: none;
+  }
+  /* جدول‌های عریض (مثل جدول فیلموگرافی) قبلاً کل صفحه رو به‌طرفین می‌کشیدن.
+     هر <table> پایین‌تر (در frontmatter) داخل یه <div class="table-scroll">
+     پیچیده می‌شه؛ خودِ این div اسکرول افقی مستقل می‌گیره و جدول ساختار
+     طبیعی‌ش (thead/tbody هم‌تراز) رو حفظ می‌کنه — برخلاف ترفند
+     display:block روی خودِ table که می‌تونه ستون‌های هدر/بدنه رو
+     ناهم‌تراز کنه. */
+  .article-body :global(.table-scroll) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: var(--space-5) 0;
+  }
+  .article-body :global(.table-scroll table) {
+    width: 100%;
+    min-width: 480px;
+    border-collapse: collapse;
+    margin: 0;
+  }
+  /* هر ویجت جاسازی‌شده (نقشه، ویدیو، آیفریم و غیره) که با عرض ثابت
+     پیکسلی اومده باشه، محدود به عرض مقاله می‌شه تا صفحه رو نکِشه —
+     خودِ محتواش (نقشه‌ی تعاملی و غیره) دست‌نخورده می‌مونه، فقط دیگه
+     نمی‌تونه از عرض ستون بیرون بزنه. */
+  .article-body :global(td),
+  .article-body :global(th) {
+    border: 1px solid var(--color-hairline);
+    padding: var(--space-2) var(--space-3);
+    text-align: start;
+  }
+  /* هر ویجت جاسازی‌شده (نقشه، ویدیو، آیفریم و غیره) که با عرض ثابت
+     پیکسلی اومده باشه، محدود به عرض مقاله می‌شه تا صفحه رو نکِشه —
+     خودِ محتواش (نقشه‌ی تعاملی و غیره) دست‌نخورده می‌مونه، فقط دیگه
+     نمی‌تونه از عرض ستون بیرون بزنه. */
+  .article-body :global(iframe),
+  .article-body :global(embed),
+  .article-body :global(object),
+  .article-body :global(video) {
+    max-width: 100%;
+  }
+  .article-body :global(iframe[width]),
+  .article-body :global(embed[width]) {
+    width: 100%;
+  }
+  /* ویجت نقشه‌ی جغرافیایی (csm-geo-card) — تا امروز هیچ استایل
+     اختصاصی نداشت، فقط قانون عمومی iframe بالا رویش اثر می‌کرد.
+     این بخش شکل کارتی، دکمه‌های زوم، شیلد لمسی، و نوار پایین
+     مختصات/جمعیت رو می‌سازه. */
+  .article-body :global(.csm-geo-card) {
+    display: block;
+    margin: var(--space-5) 0;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md, 10px);
+    overflow: hidden;
+    background: var(--color-panel);
+  }
+  .article-body :global(.csm-map-wrap) {
+    position: relative;
+    line-height: 0;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: var(--color-panel);
+  }
+  /* پیش‌نمایش ساکن: تا قبل از تعامل، یه تصویر تزئینی محلی (نه وابسته
+     به هیچ سرویس بیرونی، پس همیشه لود می‌شه) پشت iframe دیده می‌شه.
+     iframe تا فعال نشه opacity:0 داره (نه display:none، چون هنوز
+     می‌خوایم پیش‌بارگذاری DOM‌ش انجام بشه) تا صفحه‌ی سفید/خالی
+     about:blank روی پیش‌نمایش رو نپوشونه. */
+  .article-body :global(.csm-map-preview) {
+    position: absolute;
+    inset: 0;
+    background-image: url("/map-preview.svg");
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .article-body :global(.csm-map-preview::after) {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.14) 100%);
+  }
+  .article-body :global(.csm-map-pin) {
+    position: relative;
+    z-index: 1;
+    font-size: 26px;
+    filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
+    transform: translateY(-6px);
+  }
+  .article-body :global(.csm-map-wrap iframe) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .article-body :global(.csm-map-wrap.is-active iframe) {
+    opacity: 1;
+  }
+  .article-body :global(.csm-map-wrap.is-active .csm-map-preview) {
+    display: none;
+  }
+  .article-body :global(.csm-map-controls) {
+    position: absolute;
+    top: var(--space-3);
+    inset-inline-end: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 2;
+  }
+  .article-body :global(.csm-zoom-btn) {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    border: 1px solid var(--color-hairline);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    font-size: var(--text-base);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .article-body :global(.csm-zoom-btn:hover) {
+    background: var(--color-accent);
+    color: #fff;
+    border-color: var(--color-accent);
+  }
+  /* شیلد لمسی: تا قبل از تعامل، ژست‌های اسکرول موبایل رو نقشه قورت
+     نمی‌ده (چون iframe زیرش هست) — با یه تپ باز می‌شه (منطقش پایین
+     در اسکریپت هست). */
+  .article-body :global(.csm-map-shield) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    opacity: 1;
+    transition: opacity 0.35s ease;
+  }
+  .article-body :global(.csm-map-shield-hint) {
+    background: rgba(255, 255, 255, 0.97);
+    color: var(--color-ink);
+    padding: var(--space-3) var(--space-5);
+    border-radius: 999px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+  .article-body :global(.csm-map-shield.is-hidden) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .article-body :global(.csm-map-label) {
+    position: absolute;
+    bottom: var(--space-3);
+    inset-inline-start: var(--space-3);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 4px var(--space-3);
+    border-radius: 999px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  .article-body :global(.csm-geo-bar) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    background: var(--color-panel);
+  }
+  .article-body :global(.csm-geo-bar a) {
+    color: var(--color-accent);
+  }
+  /* لینک‌های داخلی — تنها لینک‌هایی که تا اینجا داخل بدنه باقی مونده‌ن
+     (منابع/پانویس‌ها قبلاً توسط parse-references.js به دکمه تبدیل
+     شدن)، یعنی همون لینک‌های داخلی که به مقالات دیگر سایت اشاره
+     می‌کنن. زیرخط گرادیانی + رنگ برنزی برند، به‌جای آبی پیش‌فرض
+     مرورگر، و انیمیشن ظریف روی هاور. */
+  /* تبلیغ درون‌مقاله‌ای (تزریق‌شده با set:html ← باید :global باشد).
+     min-height برای جلوگیری از پرش چیدمان (CLS) قبل از لود ویجت. */
+  .article-body :global(.csm-ad-inarticle) {
+    margin: var(--space-6) 0;
+    min-height: 250px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    clear: both;
+  }
+  .article-body :global(.csm-ad-label) {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+  }
+  .article-body :global(a) {
+    color: var(--color-accent);
+    font-weight: 600;
+    text-decoration: none;
+    background-image: linear-gradient(var(--color-accent), var(--color-accent));
+    background-position: 0% 100%;
+    background-repeat: no-repeat;
+    background-size: 100% 1px;
+    padding-bottom: 1px;
+    transition: background-size 0.25s ease, color 0.25s ease;
+  }
+  .article-body :global(a:hover),
+  .article-body :global(a:focus-visible) {
+    color: var(--color-accent-hover);
+    background-size: 100% 2px;
+  }
+
+  .jubna-ad-slot {
+    margin-top: var(--space-6);
+    min-height: 250px; /* برای جلوگیری از پرش چیدمان (CLS) تا وقتی ویجت لود بشه */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .related-section, .more-section {
+    margin-top: var(--space-8);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--color-hairline);
+  }
+  .related-section h2, .more-section h2 {
+    font-size: var(--text-lg);
+    margin-bottom: var(--space-4);
+  }
+  .article-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-4);
+  }
+  /* نشانگر کوچک فهرست + درصد مطالعه — عمداً خیلی کوچک و کاملاً
+     شناور (position: fixed) روی مقاله نگه داشته شده تا هیچ فضایی از
+     چیدمان مقاله (به‌خصوص در موبایل) نگیرد. بسته شروع می‌شود؛ با تپ،
+     فقط یک پاپ‌آپ کوچک بالای خودش باز می‌شود، نه یک شیت تمام‌عرض. */
+  .mini-toc {
+    position: fixed;
+    bottom: var(--space-5);
+    inset-inline-start: var(--space-5);
+    z-index: 60;
+  }
+  .mini-toc-btn {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--color-bg);
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 3px 12px color-mix(in srgb, var(--color-ink) 22%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mini-toc-btn svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .mini-toc-track { fill: none; stroke: var(--color-hairline); stroke-width: 2.5; }
+  .mini-toc-ring {
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-dasharray: 113;
+    stroke-dashoffset: 113;
+    transition: stroke-dashoffset 0.1s linear;
+  }
+  .mini-toc-pct {
+    position: relative;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-accent);
+    direction: ltr;
+  }
+  .mini-toc-pop {
+    position: absolute;
+    bottom: 52px;
+    inset-inline-start: 0;
+    width: 190px;
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--color-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-panel);
+    padding: var(--space-2) var(--space-3);
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+    pointer-events: none;
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+  .mini-toc-pop.is-open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+  .mini-toc-pop-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-muted);
+    padding: var(--space-2) var(--space-2) var(--space-3);
+    margin-bottom: var(--space-1);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+  .mini-toc-pop-pct {
+    color: var(--color-accent);
+    direction: ltr;
+  }
+  .toc-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .toc-list li { border-bottom: 1px solid var(--color-hairline); }
+  .toc-list li:last-child { border-bottom: none; }
+  .toc-link {
+    display: block;
+    padding: var(--space-2) var(--space-2);
+    border-radius: var(--radius-sm);
+    color: var(--color-ink);
+    font-size: var(--text-sm);
+    line-height: var(--line-normal);
+  }
+  .toc-link:hover { color: var(--color-accent); }
+  .toc-list li.is-active .toc-link {
+    color: var(--color-accent);
+    font-weight: 600;
+    background: var(--color-panel);
+  }
+</style>
+
+<script>
+  import { isLoggedIn, saveArticle, unsaveArticle, getSavedArticles } from "../lib/auth.js";
+
+  // نکته‌ی مهم: چون سایت از ViewTransitions استفاده می‌کنه، این اسکریپت (ماژول)
+  // فقط یک‌بار در کل بازدید کاربر لود می‌شه، نه هر بار که با کلیک به یه مقاله‌ی
+  // جدید می‌ره. برای همین منطق رو داخل یه تابع می‌ذاریم و به رویداد استاندارد
+  // astro:page-load گوش می‌دیم — این رویداد هم بعد از لود اول، هم بعد از هر
+  // soft-navigation، دوباره فایر می‌شه، پس دکمه‌ها همیشه درست کار می‌کنن.
+  //
+  // هر تابعِ init پایین، خودش روی هر المان یه data-bound می‌ذاره و اگه از
+  // قبل بسته شده بود دوباره listener اضافه نمی‌کنه — یعنی حتی اگه
+  // astro:page-load به هر دلیلی بیشتر از یه بار فایر بشه، هیچ رویدادی
+  // دوبار اجرا نمی‌شه (همون باگی که قبلاً برای پاپ‌آپ منابع پیدا کردیم).
+
+  function toBengaliNum(n) {
+    const d = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+    return String(n).split("").map((c) => d[+c] ?? c).join("");
+  }
+
+  function initArticleActions() {
+    const shareBtn = document.getElementById("shareBtn");
+    if (shareBtn && shareBtn.dataset.bound !== "1") {
+      shareBtn.dataset.bound = "1";
+      shareBtn.addEventListener("click", async () => {
+        const shareData = { title: document.title, url: window.location.href };
+        const label = shareBtn.querySelector("span");
+        if (navigator.share) {
+          try {
+            await navigator.share(shareData);
+          } catch {
+            /* کاربر انصراف داد — کاری لازم نیست */
+          }
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(shareData.url);
+          if (label) {
+            const original = label.textContent;
+            label.textContent = "লিঙ্ক কপি হয়েছে";
+            setTimeout(() => {
+              label.textContent = original;
+            }, 1800);
+          }
+        } catch {
+          /* clipboard در دسترس نبود — بی‌سروصدا رد می‌شیم */
+        }
+      });
+    }
+
+    const saveBtn = document.getElementById("saveBtn");
+    if (saveBtn && saveBtn.dataset.bound !== "1") {
+      saveBtn.dataset.bound = "1";
+      const postId = saveBtn.dataset.postId;
+      const label = saveBtn.querySelector("span");
+
+      function setSavedUI(saved) {
+        saveBtn.classList.toggle("is-saved", saved);
+        if (label) label.textContent = saved ? "সংরক্ষিত" : "সংরক্ষণ";
+      }
+
+      if (isLoggedIn()) {
+        getSavedArticles()
+          .then((list) => {
+            const saved = Array.isArray(list) && list.some((item) => String(item.id ?? item.post_id ?? item) === String(postId));
+            if (saved) setSavedUI(true);
+          })
+          .catch(() => {});
+      }
+
+      saveBtn.addEventListener("click", async () => {
+        if (!isLoggedIn()) {
+          window.location.href = "/login";
+          return;
+        }
+        const currentlySaved = saveBtn.classList.contains("is-saved");
+        saveBtn.disabled = true;
+        try {
+          if (currentlySaved) {
+            await unsaveArticle(postId);
+            setSavedUI(false);
+          } else {
+            await saveArticle(postId);
+            setSavedUI(true);
+          }
+        } catch (err) {
+          alert(err?.message || "একটি ত্রুটি হয়েছে, আবার চেষ্টা করুন।");
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // نقشه: تپ روی شیلد یا هر دکمه‌ی زوم، اولین بار iframe رو با src
+  // واقعی (از data-src) فعال می‌کنه؛ دکمه‌های +/- با تغییر bbox در
+  // همون آدرس، نقشه رو زوم می‌کنن (و اگه هنوز فعال نشده بود، همون لحظه
+  // فعالش می‌کنن). ⊙ به bbox اولیه برمی‌گرده، ↗ صفحه‌ی کامل
+  // openstreetmap.org رو در تب جدید باز می‌کنه.
+  // ---------------------------------------------------------------
+  function initGeoMaps() {
+    document.querySelectorAll(".csm-geo-card").forEach((card) => {
+      const iframe = card.querySelector("iframe[data-src]");
+      if (!iframe || iframe.dataset.bound === "1") return;
+      iframe.dataset.bound = "1";
+
+      const wrap = iframe.closest(".csm-map-wrap") || card;
+      const shield = card.querySelector(".csm-map-shield");
+      const originalSrc = iframe.dataset.src;
+
+      function setSrc(newSrc) {
+        iframe.dataset.src = newSrc;
+        if (wrap.classList.contains("is-active")) iframe.src = newSrc;
+      }
+
+      function activate() {
+        if (!wrap.classList.contains("is-active")) {
+          iframe.src = iframe.dataset.src;
+          wrap.classList.add("is-active");
+        }
+        if (shield) shield.classList.add("is-hidden");
+      }
+
+      function zoomBy(factor) {
+        try {
+          const url = new URL(iframe.dataset.src, window.location.href);
+          const bbox = (url.searchParams.get("bbox") || "").split(",").map(Number);
+          if (bbox.length === 4 && !bbox.some((n) => Number.isNaN(n))) {
+            const [lonMin, latMin, lonMax, latMax] = bbox;
+            const centerLon = (lonMin + lonMax) / 2;
+            const centerLat = (latMin + latMax) / 2;
+            const halfW = ((lonMax - lonMin) / 2) * factor;
+            const halfH = ((latMax - latMin) / 2) * factor;
+            url.searchParams.set(
+              "bbox",
+              [centerLon - halfW, centerLat - halfH, centerLon + halfW, centerLat + halfH].join(",")
+            );
+            setSrc(url.toString());
+          }
+        } catch {
+          /* آدرس قابل‌پارس نبود — فقط فعالش می‌کنیم بدون زوم */
+        }
+        activate();
+      }
+
+      if (shield) shield.addEventListener("click", activate);
+
+      card.querySelectorAll(".csm-zoom-btn").forEach((btn) => {
+        const label = (btn.textContent || "").trim();
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (label === "+") zoomBy(0.6);
+          else if (label === "-" || label === "−") zoomBy(1 / 0.6);
+          else if (label === "⊙" || label === "◉") {
+            setSrc(originalSrc);
+            activate();
+          } else if (label === "↗") {
+            window.open(originalSrc, "_blank", "noopener");
+          } else {
+            activate();
+          }
+        });
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // فهرست کوچک + درصد مطالعه: درصد از روی موقعیت article-body نسبت به
+  // اسکرول کل صفحه محاسبه می‌شه (نه یه ناحیه‌ی اسکرول‌شونده‌ی جدا)، پس
+  // با اسکرول طبیعی صفحه هماهنگه. بخش فعال هم بر همین اساس مشخص می‌شه.
+  // ---------------------------------------------------------------
+  function initToc() {
+    const wrap = document.getElementById("miniToc");
+    if (!wrap || wrap.dataset.bound === "1") return;
+    wrap.dataset.bound = "1";
+
+    const btn = document.getElementById("tocBtn");
+    const pop = document.getElementById("tocPop");
+    const ring = document.getElementById("tocRing");
+    const pctBtn = document.getElementById("tocPct");
+    const pctPop = document.getElementById("tocPopPct");
+    const articleBody = document.querySelector(".article-body");
+    const items = [...pop.querySelectorAll(".toc-list li")];
+    const RING_CIRC = 113;
+
+    function update() {
+      if (!articleBody) return;
+      const rect = articleBody.getBoundingClientRect();
+      const total = articleBody.offsetHeight - window.innerHeight;
+      const scrolledPast = -rect.top;
+      const pct = total > 0 ? Math.max(0, Math.min(100, Math.round((scrolledPast / total) * 100))) : 0;
+      ring.style.strokeDashoffset = String(RING_CIRC - (RING_CIRC * pct) / 100);
+      const label = toBengaliNum(pct) + "%";
+      pctBtn.textContent = label;
+      pctPop.textContent = label;
+
+      let activeId = null;
+      items.forEach((li) => {
+        const id = li.querySelector("a")?.dataset.target;
+        const heading = id && document.getElementById(id);
+        if (heading && heading.getBoundingClientRect().top - 90 <= 0) activeId = id;
+      });
+      items.forEach((li) => {
+        li.classList.toggle("is-active", li.querySelector("a")?.dataset.target === activeId);
+      });
+    }
+
+    btn.addEventListener("click", () => pop.classList.toggle("is-open"));
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target)) pop.classList.remove("is-open");
+    });
+    items.forEach((li) => {
+      const a = li.querySelector("a");
+      if (!a) return;
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const id = a.dataset.target;
+        const el = id && document.getElementById(id);
+        if (el) {
+          const y = el.getBoundingClientRect().top + window.scrollY - 70;
+          window.scrollTo({ top: y, behavior: "smooth" });
+        }
+        pop.classList.remove("is-open");
+      });
+    });
+
+    window.addEventListener("scroll", update, { passive: true });
+    update();
+  }
+
+  document.addEventListener("astro:page-load", () => {
+    initArticleActions();
+    initGeoMaps();
+    initToc();
+  });
+</script>

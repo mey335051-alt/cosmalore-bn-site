@@ -1,0 +1,67 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import ArticleCard from "../components/ArticleCard.astro";
+import Pagination from "../components/Pagination.astro";
+import { getAllPosts, getSiteSettings, applySortOrder } from "../lib/wp.js";
+import { PAGE_SIZE } from "../lib/config.js";
+
+const [allPostsRaw, settings] = await Promise.all([getAllPosts(), getSiteSettings()]);
+const allPosts = applySortOrder(allPostsRaw, settings.sortOrder);
+const totalPages = Math.max(1, Math.ceil(allPosts.length / PAGE_SIZE));
+const posts = allPosts.slice(0, PAGE_SIZE);
+---
+
+<BaseLayout
+  title="প্রথম পাতা"
+  description="Cosmalore (কজমালোর) বিশ্বকোষ — বৈজ্ঞানিক, ঐতিহাসিক ও সাংস্কৃতিক নিবন্ধের তথ্যভান্ডার"
+>
+  <div class="home-page">
+    <section class="all-section">
+      <h2>সাম্প্রতিক নিবন্ধ</h2>
+      {posts.length > 0 ? (
+        <div class="article-grid">
+          {posts.map((post, i) => (
+            <ArticleCard
+              slug={post.slug}
+              path={post.path}
+              title={post.title}
+              excerpt={post.excerpt}
+              category={post.category?.name}
+              image={post.image}
+              imageSrcset={post.imageSrcset}
+              priority={i === 0}
+            />
+          ))}
+        </div>
+      ) : (
+        <p class="empty-state">এখনো কোনো নিবন্ধ প্রকাশিত হয়নি।</p>
+      )}
+      <Pagination currentPage={1} totalPages={totalPages} />
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .home-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: var(--space-5);
+  }
+  .all-section h2 {
+    font-size: var(--text-xl);
+    color: var(--color-ink);
+    margin-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-hairline);
+    padding-bottom: var(--space-3);
+  }
+  .article-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--space-5);
+  }
+  .empty-state {
+    color: var(--color-muted);
+    text-align: center;
+    padding: var(--space-7) 0;
+  }
+</style>

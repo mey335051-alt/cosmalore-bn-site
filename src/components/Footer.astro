@@ -1,0 +1,46 @@
+---
+const links = [
+  { href: "/about", label: "আমাদের সম্পর্কে" },
+  { href: "/contact", label: "যোগাযোগ" },
+  { href: "/editorial-policy", label: "সম্পাদকীয় নীতি" },
+  { href: "/privacy", label: "গোপনীয়তা নীতি" },
+  { href: "/terms", label: "ব্যবহারের শর্তাবলি" },
+  { href: "/disclaimer", label: "দাবিত্যাগ" },
+];
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <nav class="footer-links">
+    {links.map((link) => (
+      <a href={link.href}>{link.label}</a>
+    ))}
+  </nav>
+  <p class="footer-copy">© {year} Cosmalore। সর্বস্বত্ব সংরক্ষিত।</p>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--color-hairline);
+    margin-top: var(--space-8);
+    padding: var(--space-6) var(--space-5);
+    text-align: center;
+  }
+  .footer-links {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-4);
+  }
+  .footer-links a {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .footer-links a:hover { color: var(--color-accent); }
+  .footer-copy {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    margin: 0;
+  }
+</style>

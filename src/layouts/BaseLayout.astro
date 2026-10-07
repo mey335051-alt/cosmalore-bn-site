@@ -1,0 +1,133 @@
+---
+import "../styles/tokens.css";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { ViewTransitions } from "astro:transitions";
+
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+}
+
+const { title, description = "", ogImage = "/og-default.jpg" } = Astro.props;
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="bn" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- فونت‌ها self-host شدن (public/fonts/) — دیگه هیچ درخواستی به
+         fonts.googleapis.com یا fonts.gstatic.com نمی‌ره. فقط وزن ۴۰۰
+         بدنه (Noto Sans Bengali) که پرکاربردترین و برای متن اول صفحه
+         حیاتی‌ترینه preload می‌شه؛ بقیه‌ی وزن‌ها (heading و bold) با
+         font-display: optional تو tokens.css لود می‌شن — بدون بلاک
+         کردن رندر و بدون هیچ ریسک جابجایی متن (CLS). -->
+    
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonicalURL} />
+    <link rel="preconnect" href="https://cosmalore.com" crossorigin />
+    <link rel="dns-prefetch" href="https://cosmalore.com" />
+    <link rel="alternate" type="application/rss+xml" title="Cosmalore" href="/rss.xml" />
+
+    <title>{title} | Cosmalore</title>
+    {description && <meta name="description" content={description} />}
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(ogImage, Astro.site)} />
+    <meta property="og:locale" content="bn_BD" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+
+    <slot name="head" />
+
+    <!-- انتقال آنی بین صفحات: صفحه‌ی بعدی رو زودتر می‌گیره و بدون
+         ری‌لود کامل جایگزین می‌کنه، پس کلیک روی هر لینک حس فوری داره -->
+    <ViewTransitions />
+<script is:inline>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-16LTSGBSQ4', { send_page_view: false });
+
+  document.addEventListener('astro:page-load', function () {
+    gtag('event', 'page_view', {
+      page_location: location.href,
+      page_title: document.title
+    });
+  });
+
+  function loadGA(){
+    if (window.__ga) return; window.__ga = 1;
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=G-16LTSGBSQ4';
+    document.head.appendChild(s);
+  }
+  ['scroll','pointerdown','keydown'].forEach(function(e){
+    addEventListener(e, loadGA, {once:true, passive:true});
+  });
+  addEventListener('load', function(){ setTimeout(loadGA, 3500); });
+</script>
+  </head>
+  <body>
+    <div id="topProgress" class="top-progress"></div>
+    <Header />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+
+    <script>
+      // لودینگ تصاویر: تا وقتی عکس کامل لود نشده، وترمارک «Cosmalore»
+      // نشون داده می‌شه؛ به‌محض لود، عکس با یه فِید ظریف ظاهر می‌شه.
+      // این تابع global‌ه چون هم موقع لود اول صفحه، هم بعد از هر
+      // انتقال (view transition)، و هم بعد از تزریق پویای نتایج
+      // جستجو باید دوباره اجرا بشه.
+      //
+      // نکته: این اسکریپت دیگه is:inline نیست — یعنی Astro اون رو تو
+      // یه فایل JS جدا با هش ثابت بسته‌بندی می‌کنه که یه‌بار دانلود
+      // و برای همیشه بین همه‌ی صفحات کش می‌شه؛ به‌جای این‌که متنش تو
+      // HTML هر صفحه از نو تکرار بشه.
+      window.cosmaloreInitImages = function () {
+        document.querySelectorAll(".img-wrap:not([data-bound])").forEach(function (wrap) {
+          wrap.setAttribute("data-bound", "1");
+          var img = wrap.querySelector("img");
+          if (!img) return;
+          if (img.complete && img.naturalWidth > 0) {
+            wrap.classList.add("is-loaded");
+          } else {
+            img.addEventListener("load", function () { wrap.classList.add("is-loaded"); }, { once: true });
+            img.addEventListener("error", function () { wrap.classList.add("is-loaded"); }, { once: true });
+          }
+        });
+      };
+
+      // نوار پیشرفت نازک بالای صفحه، برای حس «آنی بودن» هر کلیک
+      (function () {
+        var bar = document.getElementById("topProgress");
+        document.addEventListener("astro:before-preparation", function () {
+          bar.classList.add("is-active");
+        });
+        document.addEventListener("astro:page-load", function () {
+          bar.classList.remove("is-active");
+          window.cosmaloreInitImages();
+        });
+      })();
+
+      window.cosmaloreInitImages();
+    </script>
+
+    <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "c237d92895904e95a236f8b0532673b7"}'></script><!-- End Cloudflare Web Analytics -->
+  </body>
+</html>

@@ -1,0 +1,379 @@
+---
+// لوگو + باکس جستجوی کوچک بالای هر صفحه
+---
+
+<header class="site-header">
+  <a href="/bn" class="logo">Cosmalore</a>
+
+  <form action="/search" class="mini-search" role="search" autocomplete="off">
+    <input
+      type="search"
+      name="q"
+      id="headerSearchInput"
+      placeholder="বিশ্বকোষে খুঁজুন…"
+      aria-label="অনুসন্ধান"
+      aria-autocomplete="list"
+      aria-expanded="false"
+      aria-controls="headerSearchDropdown"
+    />
+    <div id="headerSearchDropdown" class="search-dropdown" hidden></div>
+  </form>
+
+  <nav class="header-nav">
+    <a href="/saved">সংরক্ষিত</a>
+    <a href="/login" id="navLogin">লগইন</a>
+    <button type="button" id="navLogout" hidden>লগআউট</button>
+  </nav>
+</header>
+
+<style>
+  .site-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    padding: var(--space-3) var(--space-5);
+    border-bottom: 1px solid var(--color-hairline);
+    background: var(--color-bg);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .logo {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: var(--text-lg);
+    color: var(--color-ink);
+    flex-shrink: 0;
+  }
+
+  .mini-search {
+    flex: 1;
+    max-width: 420px;
+    position: relative;
+  }
+
+  .search-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    background: var(--color-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-panel);
+    overflow: hidden;
+    z-index: 80;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+  }
+  /* توجه: محتوای داخل .search-dropdown با innerHTML در جاوااسکریپت
+     ساخته می‌شه، نه توسط Astro موقع build — پس هیچ‌کدوم از این عنصرها
+     data-astro-cid نمی‌گیرن و CSS اسکوپ‌شده‌ی معمولی روشون اثر نمی‌کنه.
+     برای همین همه‌ی سلکتورهای فرزند این‌جا با :global() نوشته شدن؛
+     همون باگی که قبلاً توی نقشه و کارت‌های جستجوی صفحه‌ی کامل داشتیم. */
+  .search-dropdown :global(.sd-results) {
+    overflow-y: auto;
+    flex: 1;
+  }
+  .search-dropdown :global(a) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-hairline);
+    transition: background .12s ease;
+  }
+  .search-dropdown :global(.sd-results a:last-child) { border-bottom: none; }
+  .search-dropdown :global(a:hover),
+  .search-dropdown :global(a.is-active) {
+    background: var(--color-panel);
+  }
+  .search-dropdown :global(img) {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--color-panel);
+    box-shadow: var(--shadow-card);
+  }
+  .search-dropdown :global(.sd-img-placeholder) {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+    background: var(--color-panel);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: var(--text-lg);
+    color: color-mix(in srgb, var(--color-ink) 16%, var(--color-panel));
+  }
+  .search-dropdown :global(.sd-text) {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .search-dropdown :global(.sd-title) {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: var(--line-tight);
+  }
+  .search-dropdown :global(.sd-cat) {
+    display: inline-block;
+    align-self: flex-start;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--color-accent-2);
+    padding: 1px var(--space-2);
+    border-radius: 999px;
+  }
+  .search-dropdown :global(.sd-more) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: #fff;
+    background: var(--color-accent);
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .search-dropdown :global(.sd-more:hover) {
+    background: var(--color-accent-hover);
+  }
+  .search-dropdown :global(.sd-empty) {
+    padding: var(--space-4) var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-align: center;
+  }
+
+  .mini-search input {
+    width: 100%;
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    background: var(--color-panel);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--color-ink);
+  }
+
+  .mini-search input:focus {
+    border-color: var(--color-accent);
+  }
+
+  .header-nav {
+    display: flex;
+    gap: var(--space-4);
+    margin-inline-start: auto;
+    font-size: var(--text-sm);
+  }
+
+  .header-nav a:hover {
+    color: var(--color-accent);
+  }
+
+  #navLogout {
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--color-ink);
+    cursor: pointer;
+  }
+  #navLogout:hover { color: var(--color-accent); }
+
+  @media (max-width: 640px) {
+    .site-header {
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .mini-search {
+      order: 3;
+      max-width: 100%;
+      flex-basis: 100%;
+    }
+  }
+</style>
+
+<script>
+  import { isLoggedIn, logout } from "../lib/auth.js";
+
+  function initHeaderAuthState() {
+    const loginLink = document.getElementById("navLogin") as HTMLElement | null;
+    const logoutBtn = document.getElementById("navLogout") as HTMLElement | null;
+    if (!loginLink || !logoutBtn) return;
+    if (loginLink.dataset.bound === "1") return;
+    loginLink.dataset.bound = "1";
+
+    const loggedIn = isLoggedIn();
+    loginLink.hidden = loggedIn;
+    logoutBtn.hidden = !loggedIn;
+
+    logoutBtn.addEventListener("click", () => {
+      logout();
+      window.location.href = "/";
+    });
+  }
+
+  // پیشنهادهای زنده‌ی جستجو در همون باکس بالای صفحه — با تایپ کاربر،
+  // از همون فایل سبک /search-index.json (که صفحه‌ی /search هم استفاده
+  // می‌کنه) بهترین ۶ نتیجه رو نشون می‌ده، بدون رفرش صفحه. عنوان‌ها
+  // دقیقاً همون‌طور که مقاله ذخیره شده نمایش داده می‌شن؛ فقط تطبیق روی
+  // نسخه‌ی یکسان‌شده (NFC، ارقام بنگالی ← لاتین، حذف ZWJ/ZWNJ) انجام می‌شه، پس
+  // املاهای یونیکدیِ متفاوتِ یک کلمه یکی حساب می‌شن.
+  type SearchItem = {
+    title: string;
+    excerpt: string;
+    category: string;
+    path?: string;
+    slug: string;
+    image?: string;
+    nt: string;
+    ne: string;
+    nc: string;
+  };
+
+  function normalizeBengali(s: string) {
+    return (s || "")
+      .toString()
+      .normalize("NFC")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/[\u09E6-\u09EF]/g, function (d) { return String(d.charCodeAt(0) - 0x09E6); })
+      .toLowerCase()
+      .trim();
+  }
+
+  function scoreItem(item: SearchItem, q: string) {
+    const nt = item.nt || "";
+    const ne = item.ne || "";
+    const nc = item.nc || "";
+    if (nt === q) return 100;
+    if (nt.indexOf(q) === 0) return 80;
+    if (nt.indexOf(q) !== -1) return 60;
+    if (nc.indexOf(q) !== -1) return 35;
+    if (ne.indexOf(q) !== -1) return 20;
+    return 0;
+  }
+
+  function initHeaderSearch() {
+    const input = document.getElementById("headerSearchInput") as HTMLInputElement | null;
+    const dropdown = document.getElementById("headerSearchDropdown") as HTMLElement | null;
+    const form = input?.closest("form") as HTMLElement | null;
+    if (!input || !dropdown || !form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+
+    let data: SearchItem[] | null = null;
+    let loading: Promise<void> | null = null;
+    let debounceId: ReturnType<typeof setTimeout> | undefined;
+
+    function ensureData() {
+      if (data || loading) return loading;
+      loading = fetch("/search-index.json")
+        .then((res) => res.json())
+        .then((json) => {
+          data = json;
+        })
+        .catch(() => {
+          data = [];
+        });
+      return loading;
+    }
+
+    function cardHref(item: SearchItem) {
+      // نکته‌ی رفع مشکل ایندکس گوگل: باید هماهنگ با /${trailingSlash}
+      // در ArticleCard.astro و sitemap.xml.js باشه، وگرنه همین لینک
+      // جستجو هم یه ریدایرکت ۳۰۱ اضافه می‌سازه.
+      return item.path
+        ? "/" + item.path.split("/").map(encodeURIComponent).join("/") + "/"
+        : "/" + encodeURIComponent(item.slug) + "/";
+    }
+
+    function render(query: string) {
+      const q = normalizeBengali(query);
+      if (!q || !data) {
+        dropdown.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+        return;
+      }
+      const matches = data
+        .map((item) => ({ item, score: scoreItem(item, q) }))
+        .filter((m) => m.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 6);
+
+      if (!matches.length) {
+        dropdown.innerHTML =
+          '<div class="sd-empty">কিছু পাওয়া যায়নি</div>' +
+          `<a class="sd-more" href="/search?q=${encodeURIComponent(query)}">🔍 «${query}» এর সম্পূর্ণ অনুসন্ধান →</a>`;
+        dropdown.hidden = false;
+        input.setAttribute("aria-expanded", "true");
+        return;
+      }
+
+      const rows = matches
+        .map(({ item }) => {
+          const img = item.image
+            ? `<img src="${item.image}" alt="" loading="lazy">`
+            : '<span class="sd-img-placeholder">C</span>';
+          return `<a href="${cardHref(item)}">${img}<span class="sd-text"><span class="sd-title">${item.title}</span><span class="sd-cat">${item.category || ""}</span></span></a>`;
+        })
+        .join("");
+
+      dropdown.innerHTML =
+        `<div class="sd-results">${rows}</div>` +
+        `<a class="sd-more" href="/search?q=${encodeURIComponent(query)}">সব ফলাফল দেখুন →</a>`;
+      dropdown.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+    }
+
+    input.addEventListener("input", () => {
+      const value = input.value;
+      window.clearTimeout(debounceId);
+      debounceId = setTimeout(() => {
+        ensureData()?.then(() => render(value));
+      }, 150);
+    });
+
+    input.addEventListener("focus", () => {
+      ensureData();
+      if (input.value.trim()) render(input.value);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!form.contains(e.target as Node)) {
+        dropdown.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+      }
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        dropdown.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  document.addEventListener("astro:page-load", () => {
+    initHeaderAuthState();
+    initHeaderSearch();
+  });
+</script>

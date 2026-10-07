@@ -1,0 +1,43 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="পৃষ্ঠা পাওয়া যায়নি">
+  <div class="error-page">
+    <span class="error-code">৪০৪</span>
+    <h1>এই পৃষ্ঠাটি পাওয়া যায়নি</h1>
+    <p>লিঙ্কটি হয়তো ভুল, অথবা নিবন্ধটি মুছে ফেলা হয়েছে।</p>
+    <div class="error-actions">
+      <a href="/bn" class="btn-primary">প্রথম পাতায় ফিরে যান</a>
+      <a href="/search" class="btn-secondary">বিশ্বকোষে খুঁজুন</a>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .error-page {
+    max-width: 480px;
+    margin: var(--space-8) auto;
+    padding: var(--space-5);
+    text-align: center;
+  }
+  .error-code {
+    display: block;
+    font-size: 72px;
+    font-weight: 800;
+    color: var(--color-accent);
+    line-height: 1;
+    margin-bottom: var(--space-4);
+  }
+  h1 { font-size: var(--text-xl); color: var(--color-ink); margin-bottom: var(--space-2); }
+  p { color: var(--color-muted); margin-bottom: var(--space-6); }
+  .error-actions { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; }
+  .btn-primary, .btn-secondary {
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  .btn-primary { background: var(--color-accent); color: #fff; }
+  .btn-secondary { background: var(--color-panel); color: var(--color-ink); border: 1px solid var(--color-hairline); }
+</style>

@@ -1,0 +1,48 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="যোগাযোগ" description="Cosmalore দলের সঙ্গে যোগাযোগের উপায়">
+  <div class="contact-page" dir="ltr" lang="bn">
+    <h1>যোগাযোগ</h1>
+
+    <p>
+      Cosmalore-এর উন্নয়নে আপনাদের মতামত, প্রশ্ন ও পরামর্শকে আমরা স্বাগত জানাই।
+      কোনো নিবন্ধে ভুল তথ্য চোখে পড়লে, নতুন বিষয়ের অনুরোধ থাকলে, বা অ্যাকাউন্ট ও
+      গোপনীয়তা সংক্রান্ত কোনো বিষয়ে জানতে চাইলে নিচের ইমেইলে লিখুন:
+    </p>
+
+    <a href="mailto:info@cosmalore.com" class="contact-email">
+      info@cosmalore.com
+    </a>
+  </div>
+</BaseLayout>
+
+<style>
+  .contact-page {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-5);
+    text-align: center;
+  }
+  h1 { font-size: var(--text-2xl); color: var(--color-ink); margin-bottom: var(--space-5); }
+  p { font-size: var(--text-base); line-height: var(--line-loose); color: var(--color-ink); }
+  .contact-email {
+    display: inline-block;
+    margin: var(--space-5) 0;
+    padding: var(--space-3) var(--space-6);
+    background: var(--color-accent);
+    color: #fff;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    direction: ltr;
+  }
+  .contact-note {
+    font-size: var(--text-sm);
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4);
+    margin-top: var(--space-6);
+  }
+</style>

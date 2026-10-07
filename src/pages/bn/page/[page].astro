@@ -1,0 +1,77 @@
+---
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import ArticleCard from "../../../components/ArticleCard.astro";
+import Pagination from "../../../components/Pagination.astro";
+import { getAllPosts, getSiteSettings, applySortOrder } from "../../../lib/wp.js";
+import { toBengaliNum } from "../../../lib/format.js";
+import { PAGE_SIZE } from "../../../lib/config.js";
+
+// موقع build، همه‌ی صفحات ۲ تا آخر اینجا ساخته می‌شن (صفحه‌ی ۱ همون
+// src/pages/bn/index.astro خودشه).
+export async function getStaticPaths() {
+  const [allPostsRaw, settings] = await Promise.all([getAllPosts(), getSiteSettings()]);
+  const allPosts = applySortOrder(allPostsRaw, settings.sortOrder);
+  const totalPages = Math.max(1, Math.ceil(allPosts.length / PAGE_SIZE));
+
+  const paths = [];
+  for (let p = 2; p <= totalPages; p++) {
+    paths.push({
+      params: { page: String(p) },
+      props: {
+        posts: allPosts.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE),
+        currentPage: p,
+        totalPages,
+      },
+    });
+  }
+  return paths;
+}
+
+const { posts, currentPage, totalPages } = Astro.props;
+---
+
+<BaseLayout
+  title={`পৃষ্ঠা ${toBengaliNum(currentPage)}`}
+  description="Cosmalore বিশ্বকোষের নিবন্ধ ব্রাউজ করুন"
+>
+  <div class="home-page">
+    <section class="all-section">
+      <h2>সব নিবন্ধ — পৃষ্ঠা {toBengaliNum(currentPage)}</h2>
+      <div class="article-grid">
+        {posts.map((post, i) => (
+          <ArticleCard
+            slug={post.slug}
+            path={post.path}
+            title={post.title}
+            excerpt={post.excerpt}
+            category={post.category?.name}
+            image={post.image}
+            imageSrcset={post.imageSrcset}
+            priority={i === 0}
+          />
+        ))}
+      </div>
+      <Pagination currentPage={currentPage} totalPages={totalPages} basePath="/bn" />
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .home-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: var(--space-5);
+  }
+  .all-section h2 {
+    font-size: var(--text-xl);
+    color: var(--color-ink);
+    margin-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-hairline);
+    padding-bottom: var(--space-3);
+  }
+  .article-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--space-5);
+  }
+</style>

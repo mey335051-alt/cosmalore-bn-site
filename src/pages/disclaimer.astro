@@ -1,0 +1,47 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="দাবিত্যাগ" description="Cosmalore-এর বিষয়বস্তু ব্যবহারের সীমাবদ্ধতা সম্পর্কিত দাবিত্যাগ">
+  <div class="legal-page" dir="ltr" lang="bn">
+    <h1>দাবিত্যাগ</h1>
+    <p><small>সর্বশেষ হালনাগাদ: ৬ অক্টোবর ২০২৬</small></p>
+
+    <h2>সাধারণ তথ্য</h2>
+    <p>
+      Cosmalore-এর সব নিবন্ধ সাধারণ জ্ঞান ও শিক্ষার উদ্দেশ্যে প্রকাশিত। যথাসম্ভব নির্ভুল
+      তথ্য দেওয়ার চেষ্টা করা হলেও কোনো নিবন্ধের সম্পূর্ণতা বা নির্ভুলতার নিশ্চয়তা আমরা
+      দিতে পারি না।
+    </p>
+
+    <h2>পেশাদার পরামর্শ নয়</h2>
+    <p>
+      এখানকার কোনো বিষয়বস্তু চিকিৎসা, আইনি, আর্থিক বা অন্য কোনো পেশাদার পরামর্শের
+      বিকল্প নয়। এসব ক্ষেত্রে সংশ্লিষ্ট বিশেষজ্ঞের পরামর্শ নিন।
+    </p>
+
+    <h2>বহিঃসংযোগ</h2>
+    <p>
+      কিছু নিবন্ধে তৃতীয় পক্ষের ওয়েবসাইটের লিঙ্ক থাকতে পারে। সেসব সাইটের বিষয়বস্তু বা
+      নীতির জন্য আমরা দায়ী নই।
+    </p>
+
+    <h2>ভুল জানান</h2>
+    <p>
+      কোনো ভুল বা অসংগতি চোখে পড়লে লিখুন:
+      <a href="mailto:info@cosmalore.com">info@cosmalore.com</a>।
+    </p>
+  </div>
+</BaseLayout>
+
+<style>
+  .legal-page {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-5);
+  }
+  h1 { font-size: var(--text-2xl); color: var(--color-ink); margin-bottom: var(--space-5); }
+  h2 { font-size: var(--text-lg); color: var(--color-ink); margin-top: var(--space-6); margin-bottom: var(--space-3); }
+  p { font-size: var(--text-base); line-height: var(--line-loose); color: var(--color-ink); }
+  a { color: var(--color-accent); }
+</style>

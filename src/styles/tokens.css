@@ -1,0 +1,177 @@
+/* ==========================================================================
+   فونت‌های self-host شده — Noto Sans Bengali (subset بنگالی، وزن‌های
+   ۴۰۰ و ۷۰۰) از سرور خودمون (public/fonts/). هیچ درخواستی به
+   fonts.googleapis.com یا fonts.gstatic.com نمی‌ره.
+
+   font-display: optional یعنی: اگه فونت زود برسه استفاده می‌شه، اگه
+   دیر برسه مرورگر منتظرش نمی‌مونه و دیگه هیچ‌وقت متن رو دوباره نمی‌چینه
+   (صفر ریسک CLS). فونت سیستمی (system-ui) همچنان اولویت اوله؛ این
+   فونت فقط برای glyphهای بنگالی‌ای که سیستم نداره جایگزینه.
+   ========================================================================== */
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url("/fonts/noto-sans-bengali-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url("/fonts/noto-sans-bengali-700.woff2") format("woff2");
+}
+
+/* ==========================================================================
+   CosmaLore — Design Tokens
+   تنها فایلی که رنگ و فونت توش تعریف می‌شه. بقیه‌ی فایل‌ها فقط به این
+   متغیرها اشاره می‌کنن؛ هیچ‌جای دیگه‌ای کد رنگ hex نباید نوشته بشه.
+   ========================================================================== */
+
+:root {
+  /* رنگ‌ها */
+  --color-bg: #ffffff;          /* پس‌زمینه‌ی اصلی */
+  --color-panel: #faf9f6;       /* پس‌زمینه‌ی کارت/پنل */
+  --color-ink: #16161d;         /* متن اصلی */
+  --color-muted: #6b6b76;       /* متن کم‌رنگ */
+  --color-hairline: #e6e4df;    /* خط جداکننده */
+  --color-accent: #9c6b2e;      /* برنزی — تأکیدی */
+  --color-accent-2: #1f5f5b;    /* سبزآبی تیره — دسته‌بندی */
+  --color-link-ref: #3366cc;    /* لینک منابع/پانویس */
+
+  /* حالت‌های مشتق‌شده (از روی رنگ‌های بالا، بدون هیچ hex جدید) */
+  --color-accent-hover: color-mix(in srgb, var(--color-accent) 85%, black);
+  --color-accent-2-hover: color-mix(in srgb, var(--color-accent-2) 85%, black);
+  --color-panel-hover: color-mix(in srgb, var(--color-panel) 92%, black);
+  --color-overlay: color-mix(in srgb, var(--color-ink) 55%, transparent);
+
+  /* فونت‌ها — فونت سیستمی با جایگزین Noto Sans Bengali برای متن بنگالی. */
+  --font-body: system-ui, -apple-system, "Segoe UI", Tahoma, "Noto Sans Bengali", sans-serif;
+  --font-heading: system-ui, -apple-system, "Segoe UI", Tahoma, "Noto Sans Bengali", sans-serif;
+  --font-mono: monospace;
+
+  /* مقیاس فاصله‌گذاری */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* شعاع گوشه و سایه */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --shadow-card: 0 1px 2px color-mix(in srgb, var(--color-ink) 6%, transparent);
+  --shadow-panel: 0 -6px 32px color-mix(in srgb, var(--color-ink) 20%, transparent);
+
+  /* تایپوگرافی */
+  --text-xs: 12.5px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+
+  --line-tight: 1.35;
+  --line-normal: 1.7;
+  --line-loose: 1.85;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  direction: ltr;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--line-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   لودینگ تصاویر — وترمارک ظریف «Cosmalore» تا لحظه‌ی لود کامل عکس
+   ========================================================================== */
+.img-wrap {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  background: var(--color-panel);
+}
+
+.img-wrap::before {
+  content: "Cosmalore";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(18px, 6vw, 40px);
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--color-ink) 14%, var(--color-panel));
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+  z-index: 1;
+}
+
+.img-wrap img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.img-wrap.is-loaded::before {
+  opacity: 0;
+}
+.img-wrap.is-loaded img {
+  opacity: 1;
+}
+
+/* نوار پیشرفت بالای صفحه هنگام انتقال بین صفحات */
+.top-progress {
+  position: fixed;
+  top: 0; right: 0; left: 0;
+  height: 3px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  z-index: 10000;
+  opacity: 0;
+  transition: transform 4s cubic-bezier(.1,.6,.4,1), opacity 0.2s ease;
+}
+.top-progress.is-active {
+  opacity: 1;
+  transform: scaleX(0.85);
+}

@@ -1,0 +1,50 @@
+---
+import { toBengaliNum } from "../lib/format.js";
+interface Props {
+  currentPage: number;
+  totalPages: number;
+  basePath?: string;
+}
+const { currentPage, totalPages, basePath = "" } = Astro.props;
+const home = basePath === "" ? "/" : basePath;
+const prevHref = currentPage <= 2 ? home : `${basePath}/page/${currentPage - 1}`;
+const nextHref = `${basePath}/page/${currentPage + 1}`;
+---
+
+{totalPages > 1 && (
+  <nav class="pagination" aria-label="পৃষ্ঠাসংখ্যা">
+    {currentPage > 1 ? (
+      <a href={prevHref} class="page-link">আগের</a>
+    ) : (
+      <span class="page-link is-disabled">আগের</span>
+    )}
+    <span class="page-info">পৃষ্ঠা {toBengaliNum(currentPage)} / {toBengaliNum(totalPages)}</span>
+    {currentPage < totalPages ? (
+      <a href={nextHref} class="page-link">পরের</a>
+    ) : (
+      <span class="page-link is-disabled">পরের</span>
+    )}
+  </nav>
+)}
+
+<style>
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    margin-top: var(--space-7);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--color-hairline);
+  }
+  .page-link {
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    color: var(--color-ink);
+    font-size: var(--text-sm);
+  }
+  .page-link:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  .page-link.is-disabled { color: var(--color-hairline); pointer-events: none; }
+  .page-info { color: var(--color-muted); font-size: var(--text-sm); }
+</style>

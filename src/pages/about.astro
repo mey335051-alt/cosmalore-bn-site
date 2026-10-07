@@ -1,0 +1,63 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="আমাদের সম্পর্কে" description="Cosmalore ও এর প্রতিষ্ঠাতা সম্পর্কে জানুন">
+  <div class="about-page" dir="ltr" lang="bn">
+    <h1>আমাদের সম্পর্কে</h1>
+
+    <p>
+      <strong>Cosmalore</strong> (কজমালোর) একটি গভীর ও গবেষণাধর্মী ডিজিটাল বিশ্বকোষ। এর লক্ষ্য
+      জ্ঞানের বিভিন্ন শাখায় নির্ভরযোগ্য ও সুচিন্তিত নিবন্ধ উপস্থাপন করা—স্পষ্ট ভাষায়,
+      তথ্যসূত্রসহ, যাতে একাডেমিক গভীরতা ও পাঠের সহজতা একসঙ্গে থাকে।
+    </p>
+
+    <p>
+      এই বাংলা সংস্করণের প্রতিষ্ঠাতা <strong>মাহমুদ আল-হাসান</strong>। ২০২৬ সালের
+      ৬ অক্টোবর এর যাত্রা শুরু। উদ্দেশ্য বাংলা ভাষায় একটি নির্ভরযোগ্য ও সর্বব্যাপী
+      তথ্যভান্ডার গড়ে তোলা, যা পাঠক ও গবেষক উভয়ের কাজে লাগবে।
+    </p>
+
+    <h2>আমরা কীভাবে কাজ করি</h2>
+    <p>
+      প্রতিটি নিবন্ধে আমরা যাচাইযোগ্য উৎসের ওপর নির্ভর করি এবং নিবন্ধের শেষে
+      “সূত্র ও তথ্যসূত্র” অংশে তা উল্লেখ করি। কোনো ভুল ধরা পড়লে আমরা তা সংশোধন করি।
+      বিস্তারিত জানতে <a href="/editorial-policy">সম্পাদকীয় নীতি</a> পড়ুন।
+    </p>
+
+    <h2>যোগাযোগ</h2>
+    <p>
+      মতামত, পরামর্শ বা ভুল জানাতে লিখুন:
+      <a href="mailto:info@cosmalore.com">info@cosmalore.com</a>
+    </p>
+  </div>
+</BaseLayout>
+
+<style>
+  .about-page {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-5);
+  }
+  h1 {
+    font-size: var(--text-2xl);
+    color: var(--color-ink);
+    margin-bottom: var(--space-5);
+    text-align: center;
+  }
+  p {
+    font-size: var(--text-base);
+    line-height: var(--line-loose);
+    color: var(--color-ink);
+    margin-bottom: var(--space-4);
+  }
+  .about-note {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    padding: var(--space-4);
+    margin-top: var(--space-6);
+  }
+</style>

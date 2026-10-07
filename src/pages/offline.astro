@@ -1,0 +1,37 @@
+---
+import "../styles/tokens.css";
+---
+
+<!doctype html>
+<html lang="bn" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>সাইট সাময়িকভাবে অনুপলব্ধ | Cosmalore</title>
+  </head>
+  <body>
+    <div class="offline-page">
+      <span class="offline-icon" aria-hidden="true">🛠️</span>
+      <h1>সাইট সাময়িকভাবে অনুপলব্ধ</h1>
+      <p>আমরা এখন একটি ছোট আপডেট করছি। অনুগ্রহ করে কয়েক মিনিট পর আবার চেষ্টা করুন।</p>
+    </div>
+  </body>
+</html>
+
+<style>
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .offline-page {
+    max-width: 420px;
+    text-align: center;
+    padding: var(--space-5);
+  }
+  .offline-icon { font-size: 48px; display: block; margin-bottom: var(--space-5); }
+  h1 { font-size: var(--text-xl); color: var(--color-ink); margin-bottom: var(--space-3); }
+  p { color: var(--color-muted); }
+</style>

@@ -1,0 +1,118 @@
+---
+// ⚠️ نام این فایل، آدرس ورود به پنل ادمینه. قبل از دیپلوی، این فایل رو
+// به یه اسم تصادفی و غیرقابل‌حدس rename کنید، مثلاً:
+//   src/pages/admin/x7f2k9m4-panel.astro
+// و این توضیح رو حذف کنید.
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="নিয়ন্ত্রণ প্যানেল">
+  <div class="admin-page">
+    <h1>নিয়ন্ত্রণ প্যানেল</h1>
+
+    <section class="admin-card">
+      <h2>প্রথম পাতার প্রদর্শন ক্রম</h2>
+      <p class="admin-hint">
+        প্রথম পাতার নিবন্ধগুলো কোন ভিত্তিতে সাজানো হবে তা নির্ধারণ করুন।
+      </p>
+
+      <p id="loggedOutNotice" class="admin-hint" hidden>
+        ⚠️ এই সেটিং বদলাতে হলে আগে একটি অ্যাডমিন অ্যাকাউন্টে (ওয়ার্ডপ্রেসের
+        Administrator ভূমিকা) লগইন করতে হবে। বর্তমান সেটিং এখনও দেখা যাচ্ছে।
+      </p>
+
+      <div class="sort-options">
+        <label class="sort-option">
+          <input type="radio" name="sortOrder" value="newest" />
+          <span>সর্বশেষ</span>
+        </label>
+        <label class="sort-option">
+          <input type="radio" name="sortOrder" value="random" />
+          <span>এলোমেলো</span>
+        </label>
+        <label class="sort-option is-disabled">
+          <input type="radio" name="sortOrder" value="popular" disabled />
+          <span>সর্বাধিক দেখা (শীঘ্রই)</span>
+        </label>
+      </div>
+
+      <p id="saveStatus" class="save-status" aria-live="polite"></p>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .admin-page {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-5);
+  }
+  h1 { font-size: var(--text-xl); margin-bottom: var(--space-5); }
+  .admin-card {
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    padding: var(--space-5);
+  }
+  h2 { font-size: var(--text-base); margin: 0 0 var(--space-2); }
+  .admin-hint { font-size: var(--text-sm); color: var(--color-muted); margin-bottom: var(--space-4); }
+  .sort-options { display: flex; flex-direction: column; gap: var(--space-3); }
+  .sort-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background: var(--color-bg);
+  }
+  .sort-option:has(input:checked) {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
+  }
+  .sort-option.is-disabled { opacity: 0.5; cursor: not-allowed; }
+  .save-status { font-size: var(--text-sm); color: var(--color-accent-2); margin-top: var(--space-4); min-height: 1.2em; }
+</style>
+
+<script>
+  import { isLoggedIn, getSettings, updateSettings } from "../../lib/auth.js";
+
+  const radios = document.querySelectorAll<HTMLInputElement>(
+    'input[name="sortOrder"]:not([disabled])'
+  );
+  const status = document.getElementById("saveStatus") as HTMLElement;
+  const loggedOutNotice = document.getElementById("loggedOutNotice") as HTMLElement;
+
+  async function initAdminPanel() {
+    loggedOutNotice.hidden = isLoggedIn();
+
+    // تنظیم فعلی رو مستقیم از وردپرس می‌خونیم (نه از localStorage)،
+    // تا همیشه واقعاً همون چیزی رو نشون بده که روی سایت زنده اعماله.
+    const { sortOrder } = await getSettings();
+    radios.forEach((r) => (r.checked = r.value === sortOrder));
+
+    radios.forEach((r) => {
+      r.addEventListener("change", async () => {
+        if (!isLoggedIn()) {
+          status.textContent = "প্রথমে অ্যাডমিন অ্যাকাউন্টে লগইন করুন।";
+          r.checked = false;
+          return;
+        }
+        r.disabled = true;
+        try {
+          await updateSettings(r.value);
+          status.textContent =
+            "সংরক্ষিত হয়েছে ✓ — সাইট পুনরায় প্রকাশ (build) করার পর পরিবর্তন দেখা যাবে।";
+        } catch (err) {
+          status.textContent = err instanceof Error ? err.message : "সংরক্ষণে ত্রুটি।";
+        } finally {
+          r.disabled = false;
+          setTimeout(() => (status.textContent = ""), 4000);
+        }
+      });
+    });
+  }
+
+  document.addEventListener("astro:page-load", initAdminPanel);
+</script>

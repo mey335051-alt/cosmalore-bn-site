@@ -1,0 +1,107 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="সংরক্ষিত" description="আপনার সংরক্ষিত নিবন্ধ">
+  <div class="saved-page">
+    <h1>আমার সংরক্ষিত নিবন্ধ</h1>
+
+    <div id="loggedOutState" class="empty-state" hidden>
+      <p>সংরক্ষিত নিবন্ধ দেখতে অনুগ্রহ করে আগে লগইন করুন।</p>
+      <a href="/login" class="login-link">লগইন</a>
+    </div>
+
+    <p id="loadingState" class="empty-state">লোড হচ্ছে…</p>
+
+    <div id="emptyState" class="empty-state" hidden>
+      <p>আপনি এখনো কোনো নিবন্ধ সংরক্ষণ করেননি।</p>
+    </div>
+
+    <div id="savedGrid" class="article-grid"></div>
+  </div>
+</BaseLayout>
+
+<style>
+  .saved-page {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: var(--space-5);
+  }
+  h1 { font-size: var(--text-xl); margin-bottom: var(--space-5); }
+  .empty-state { text-align: center; color: var(--color-muted); padding: var(--space-7) 0; }
+  .login-link {
+    display: inline-block;
+    margin-top: var(--space-4);
+    padding: var(--space-2) var(--space-5);
+    background: var(--color-accent);
+    color: #fff;
+    border-radius: var(--radius-sm);
+  }
+  .article-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-4);
+  }
+  .article-grid :global(.article-card) {
+    display: block;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .article-grid :global(.img-wrap) {
+    width: 100%; aspect-ratio: 16 / 9;
+  }
+  .article-grid :global(.card-body) { padding: var(--space-4); }
+  .article-grid :global(.card-title) {
+    font-size: var(--text-base); font-weight: 700; color: var(--color-ink); margin: 0;
+  }
+</style>
+
+<script>
+  import { isLoggedIn, getSavedArticles } from "../lib/auth.js";
+
+  // همون فیکس: عناصر رو هر بار تازه پیدا می‌کنیم و init رو به astro:page-load
+  // وصل می‌کنیم تا اگه کاربر با کلیک (بدون رفرش کامل) به این صفحه برسه هم درست کار کنه
+  async function init() {
+    const loggedOutState = document.getElementById("loggedOutState") as HTMLElement;
+    const loadingState = document.getElementById("loadingState") as HTMLElement;
+    const emptyState = document.getElementById("emptyState") as HTMLElement;
+    const grid = document.getElementById("savedGrid") as HTMLElement;
+    if (!loggedOutState || !loadingState || !emptyState || !grid) return;
+
+    if (!isLoggedIn()) {
+      loadingState.hidden = true;
+      loggedOutState.hidden = false;
+      return;
+    }
+
+    try {
+      const articles = await getSavedArticles();
+      loadingState.hidden = true;
+
+      if (!articles.length) {
+        emptyState.hidden = false;
+        return;
+      }
+
+      grid.innerHTML = articles
+        .map((a: any) => {
+          const href = a.path
+            ? "/" + a.path.split("/").map(encodeURIComponent).join("/")
+            : "/" + encodeURIComponent(a.slug);
+          return `
+        <a href="${href}" class="article-card">
+          ${a.image ? `<div class="img-wrap"><img src="${a.image}" alt="" loading="lazy"></div>` : ""}
+          <div class="card-body"><h3 class="card-title">${a.title}</h3></div>
+        </a>`;
+        })
+        .join("");
+      if ((window as any).cosmaloreInitImages) (window as any).cosmaloreInitImages();
+    } catch {
+      loadingState.textContent = "সংরক্ষিত নিবন্ধ লোড করতে ত্রুটি হয়েছে।";
+    }
+  }
+
+  document.addEventListener("astro:page-load", init);
+</script>
