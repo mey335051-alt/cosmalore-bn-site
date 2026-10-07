@@ -5,30 +5,29 @@
  * `astro build` اجرا می‌شن (نه در مرورگر کاربر نهایی).
  *
  * پیش‌نیاز: آدرس زیر باید در دسترس و عمومی باشه:
- *   https://cosmalore.com/fa/wp-json/wp/v2/posts
+ *   https://cosmalore.com/bn/wp-json/wp/v2/posts
  *
  * سه فیکس مهمی که امروز حین تست روی cosmalore.com کشف شدن:
  * ۱) بدون هدر User-Agent شبیه مرورگر، بعضی هاست‌ها به‌جای JSON یه
  *    صفحه‌ی HTML چالش/خطا برمی‌گردونن.
  * ۲) این هاست خاص گاهی ۳۰-۴۰ ثانیه طول می‌کشه یا موقتاً throttle
  *    می‌شه؛ بدون timeout و تلاش مجدد، build ممکنه گیر کنه یا شکست بخوره.
- * ۳) مقالاتی که اسلاگشون از عنوان فارسی خودکار ساخته شده، توی وردپرس
+ * ۳) مقالاتی که اسلاگشون از عنوان عربی خودکار ساخته شده، توی وردپرس
  *    به‌صورت درصدی/percent-encoded ذخیره می‌شن (مثل %d9%85%d8%b9...).
- *    دیکدش می‌کنیم تا متن فارسی واقعی به دست بیاد و Astro بتونه مسیر
+ *    دیکدش می‌کنیم تا متن عربی واقعی به دست بیاد و Astro بتونه مسیر
  *    استاتیک درست بسازه (قبلاً این مقالات کلاً رد می‌شدن؛ الان نمایش
  *    داده می‌شن).
  * ----------------------------------------------------------------
  */
 
 // TODO: با آدرس واقعی وردپرس‌تون جایگزین کنید
-// برای تست محلی می‌شه با متغیر محیطی WP_BASE_URL عوضش کرد.
-const WP_BASE_URL = process.env.WP_BASE_URL || "https://cosmalore.com/fa/wp-json/wp/v2";
+const WP_BASE_URL = "https://cosmalore.com/bn/wp-json/wp/v2";
 
 const BROWSER_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
   Accept: "application/json,text/plain,*/*",
-  "Accept-Language": "fa,en-US;q=0.9,en;q=0.8",
+  "Accept-Language": "bn,en-US;q=0.9,en;q=0.8",
 };
 
 const REQUEST_TIMEOUT_MS = 60000;
@@ -60,25 +59,34 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// کش مقالات داخل node_modules/.astro نگه داشته می‌شه، چون کلادفلر
-// (Workers Builds → Settings → Build → Build cache) دقیقاً همین پوشه رو
-// بین بیلدها ذخیره و بازیابی می‌کنه. اینجوری بیلدهای بعدی فقط مقالات
-// جدید/تغییریافته رو از وردپرس می‌گیرن، نه همه‌ی مقالات رو.
-const CACHE_PATH = path.join(__dirname, "..", "..", "node_modules", ".astro", "wp-cache.json");
+// ⚠️ مسیر کش: Cloudflare (Pages و Workers Builds) از بین پوشه‌های پروژه فقط
+// node_modules/.astro رو بین بیلدها نگه می‌داره. قبلاً کش توی ریشه‌ی پروژه
+// (.wp-cache.json) بود و بعد از هر بیلد دور ریخته می‌شد، یعنی هر بیلد همه‌ی
+// مقاله‌ها رو از اول از وردپرس می‌کشید. حالا کش داخل پوشه‌ای می‌ره که
+// Cloudflare ذخیره‌ش می‌کنه تا بیلدهای بعدی فقط مقاله‌های تازه رو بکشن.
+// (فعال بودن «Build cache» در تنظیمات Cloudflare لازمه.)
+const CACHE_DIR = path.join(__dirname, "..", "..", "node_modules", ".astro", "cosmalore");
+const CACHE_PATH = path.join(CACHE_DIR, "wp-cache.json");
+// اگه ساختار normalizePost عوض شد، این عدد رو بالا ببرید تا کش قدیمی دور ریخته شه.
+const CACHE_VERSION = 2;
 
 function loadCache() {
-  if (!existsSync(CACHE_PATH)) return { fetchedAt: null, posts: {} };
+  const empty = { fetchedAt: null, posts: {} };
+  if (!existsSync(CACHE_PATH)) return empty;
   try {
-    return JSON.parse(readFileSync(CACHE_PATH, "utf-8"));
+    const c = JSON.parse(readFileSync(CACHE_PATH, "utf-8"));
+    // کش مال یه نسخه‌ی دیگه‌ی کد یا یه وردپرس دیگه (مثلاً /ar به‌جای /bn) بود؟ دورش بریز.
+    if (c.version !== CACHE_VERSION || c.source !== WP_BASE_URL) return empty;
+    return c;
   } catch {
-    return { fetchedAt: null, posts: {} };
+    return empty;
   }
 }
 
 function saveCache(cache) {
   try {
-    mkdirSync(path.dirname(CACHE_PATH), { recursive: true });
-    writeFileSync(CACHE_PATH, JSON.stringify(cache), "utf-8");
+    mkdirSync(CACHE_DIR, { recursive: true });
+    writeFileSync(CACHE_PATH, JSON.stringify({ ...cache, version: CACHE_VERSION, source: WP_BASE_URL }), "utf-8");
   } catch (e) {
     console.warn(`[wp.js] ذخیره‌ی کش محلی ممکن نشد (${e.message}) — دفعه‌ی بعد کامل دوباره کشیده می‌شه.`);
   }
@@ -149,6 +157,36 @@ export function getAllPosts() {
   return allPostsPromise;
 }
 
+async function pruneDeletedPosts(cache) {
+  const live = new Set();
+  let page = 1;
+  while (true) {
+    let res;
+    try {
+      res = await wpFetch(`${WP_BASE_URL}/posts?per_page=100&page=${page}&_fields=id`);
+    } catch {
+      return 0; // نتونستیم تأیید کنیم → کش دست‌نخورده می‌مونه
+    }
+    if (!res.ok) {
+      if (res.status === 400 && page > 1) break; // بعد از آخرین صفحه
+      return 0;
+    }
+    let batch;
+    try { batch = await res.json(); } catch { return 0; }
+    if (!Array.isArray(batch)) return 0;
+    batch.forEach((p) => live.add(String(p.id)));
+    if (batch.length < 100) break;
+    page++;
+  }
+  // لیست خالی ولی کش پر؟ مشکوکه (مثلاً وردپرس موقتاً خراب بوده) — چیزی پاک نکن.
+  if (live.size === 0) return 0;
+  let removed = 0;
+  for (const id of Object.keys(cache.posts)) {
+    if (!live.has(String(id))) { delete cache.posts[id]; removed++; }
+  }
+  return removed;
+}
+
 async function fetchAllPostsIncremental() {
   // حالت تست سرعت (WP_POST_LIMIT): کش رو کاملاً نادیده می‌گیریم و فقط
   // همین تعداد مقاله رو تازه می‌گیریم — تا نتیجه‌ی build همیشه دقیقاً
@@ -173,7 +211,8 @@ async function fetchAllPostsIncremental() {
 
   const cache = loadCache();
   const sinceParam = cache.fetchedAt ? `&modified_after=${encodeURIComponent(cache.fetchedAt)}` : "";
-  const newFetchedAt = new Date().toISOString();
+  // ۵ دقیقه هم‌پوشانی: اگه ساعت این ماشین با سرور وردپرس کمی فرق داشته باشه، مقاله‌ای جا نمی‌افته.
+  const newFetchedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
   let page = 1;
   const perPage = 30;
@@ -192,29 +231,16 @@ async function fetchAllPostsIncremental() {
     page++;
   }
 
-  // مقالاتی که از وردپرس حذف یا از حالت انتشار خارج شدن، با modified_after
-  // دیده نمی‌شن؛ پس اگه کش داریم، فهرست شناسه‌های فعلی رو (خیلی سبک:
-  // فقط id) می‌گیریم و هر چی توش نیست رو از کش پاک می‌کنیم.
-  if (sinceParam && Object.keys(cache.posts).length) {
-    const liveIds = new Set();
-    let idPage = 1;
-    while (true) {
-      const ids = await fetchJsonPage(`${WP_BASE_URL}/posts?per_page=100&page=${idPage}&_fields=id`, idPage);
-      if (ids === null || !ids.length) break;
-      ids.forEach((x) => liveIds.add(String(x.id)));
-      if (ids.length < 100) break;
-      idPage++;
-    }
-    if (liveIds.size) {
-      for (const id of Object.keys(cache.posts)) {
-        if (!liveIds.has(String(id))) delete cache.posts[id];
-      }
-    }
-  }
-
   // فقط وقتی همه‌چیز بدون خطا تموم شد، تاریخ رو آپدیت می‌کنیم — اگه
   // یه‌جای وسط throw بشه، تاریخ قدیمی می‌مونه و دفعه‌ی بعد از همون‌جا
   // دوباره تلاش می‌شه (نه اینکه چیزی گم بشه).
+  // مقاله‌ای که توی وردپرس حذف یا پیش‌نویس شده، با modified_after پیدا نمی‌شه؛
+  // پس فقط لیست idها (خیلی سبک) رو می‌گیریم و موارد حذف‌شده رو از کش پاک می‌کنیم.
+  if (cache.fetchedAt) {
+    const removed = await pruneDeletedPosts(cache);
+    if (removed > 0) console.log(`[wp.js] ${removed} مقاله‌ی حذف‌شده از کش پاک شد.`);
+  }
+
   cache.fetchedAt = newFetchedAt;
   saveCache(cache);
 
@@ -300,7 +326,7 @@ function normalizePost(raw) {
     id: raw.id,
     slug: safeDecodeSlug(raw.slug),
     // آدرس کامل مقاله دقیقاً مطابق ساختار فعلی وردپرس (مثل
-    // fa/2026/08/28/battle-of-wadi-lakkah)، بدون اسلش ابتدا/انتها.
+    // bn/2026/08/28/example-post)، بدون اسلش ابتدا/انتها.
     // این فیلد جدیده و کنار slug قدیمی نگه داشته می‌شه (نه جایگزینش).
     path: buildPathFromLink(raw.link),
     title: decodeEntities(raw.title?.rendered || ""),
@@ -326,9 +352,9 @@ function formatCitationMarkers(html) {
     "$1($2)$3"
   );
 }
-// raw.link نمونه‌اش چیزی مثل "https://cosmalore.com/fa/2026/08/28/xyz/"
+// raw.link نمونه‌اش چیزی مثل "https://cosmalore.com/bn/2026/08/28/xyz/"
 // است. فقط مسیر (بدون دامنه) رو نگه می‌داریم، و چون بعضی بخش‌های مسیر
-// (نه فقط اسلاگ آخر) ممکنه فارسی/percent-encoded باشن، تک‌تک بخش‌ها رو
+// (نه فقط اسلاگ آخر) ممکنه عربی/percent-encoded باشن، تک‌تک بخش‌ها رو
 // جدا دیکد می‌کنیم، نه کل رشته رو یه‌جا.
 function buildPathFromLink(link) {
   if (!link) return null;
@@ -363,13 +389,12 @@ function stripHtml(html) {
 }
 
 // وقتی نویسنده فیلد «وصف مختصر» رو خالی می‌ذاره، خودِ وردپرس یه excerpt
-// خودکار از ابتدای متن مقاله می‌سازه و همیشه با یه لینک «ادامه مطلب»
+// خودکار از ابتدای متن مقاله می‌سازه و همیشه با یه لینک «اقرأ المزيد»
 // (more-link) تمومش می‌کنه — این امضای ثابتیه که فقط توی حالت خودکار
 // اضافه می‌شه، نه وقتی نویسنده خودش چیزی نوشته. اگه این امضا رو ببینیم،
 // یعنی توضیح مختصرِ واقعی‌ای وجود نداره و باید رشته‌ی خالی برگردونیم —
 // نه اینکه بخشی از خودِ مقاله رو به‌جای توضیح مختصر نشون بدیم.
-const AUTO_EXCERPT_SIGNATURE =
-  /class=["']more-link["']|ادامه\s*(?:[\u200c‌]\s*)?(?:ی\s*)?(?:مطلب|مقاله)|بیشتر\s*بخوانید|ادامه\s*را\s*بخوانید|اقرأ\s*المزيد/i;
+const AUTO_EXCERPT_SIGNATURE = /class=["']more-link["']|আরও\s*পড়ুন|Continue\s*reading|Read\s*more/i;
 
 function extractManualExcerpt(rawExcerptHtml) {
   if (!rawExcerptHtml || AUTO_EXCERPT_SIGNATURE.test(rawExcerptHtml)) return "";
