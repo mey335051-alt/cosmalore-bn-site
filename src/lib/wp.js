@@ -54,25 +54,39 @@ async function wpFetch(url, attempt = 1) {
   }
 }
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_PATH = path.join(__dirname, "..", "..", ".wp-cache.json");
+// ⚠️ مسیر کش: Cloudflare (Pages و Workers Builds) از بین پوشه‌های پروژه فقط
+// node_modules/.astro رو بین بیلدها نگه می‌داره. قبلاً کش توی ریشه‌ی پروژه
+// (.wp-cache.json) بود و بعد از هر بیلد دور ریخته می‌شد، یعنی هر بیلد همه‌ی
+// مقاله‌ها رو از اول از وردپرس می‌کشید. حالا کش داخل پوشه‌ای می‌ره که
+// Cloudflare ذخیره‌ش می‌کنه تا بیلدهای بعدی فقط مقاله‌های تازه رو بکشن.
+// (فعال بودن «Build cache» در تنظیمات Cloudflare لازمه.)
+const CACHE_DIR = path.join(__dirname, "..", "..", "node_modules", ".astro", "cosmalore");
+const CACHE_PATH = path.join(CACHE_DIR, "wp-cache.json");
+// اگه ساختار normalizePost عوض شد، این عدد رو بالا ببرید تا کش قدیمی دور ریخته شه.
+const CACHE_VERSION = 2;
 
 function loadCache() {
-  if (!existsSync(CACHE_PATH)) return { fetchedAt: null, posts: {} };
+  const empty = { fetchedAt: null, posts: {} };
+  if (!existsSync(CACHE_PATH)) return empty;
   try {
-    return JSON.parse(readFileSync(CACHE_PATH, "utf-8"));
+    const c = JSON.parse(readFileSync(CACHE_PATH, "utf-8"));
+    // کش مال یه نسخه‌ی دیگه‌ی کد یا یه وردپرس دیگه (مثلاً /ar به‌جای /bn) بود؟ دورش بریز.
+    if (c.version !== CACHE_VERSION || c.source !== WP_BASE_URL) return empty;
+    return c;
   } catch {
-    return { fetchedAt: null, posts: {} };
+    return empty;
   }
 }
 
 function saveCache(cache) {
   try {
-    writeFileSync(CACHE_PATH, JSON.stringify(cache), "utf-8");
+    mkdirSync(CACHE_DIR, { recursive: true });
+    writeFileSync(CACHE_PATH, JSON.stringify({ ...cache, version: CACHE_VERSION, source: WP_BASE_URL }), "utf-8");
   } catch (e) {
     console.warn(`[wp.js] ذخیره‌ی کش محلی ممکن نشد (${e.message}) — دفعه‌ی بعد کامل دوباره کشیده می‌شه.`);
   }
@@ -143,6 +157,36 @@ export function getAllPosts() {
   return allPostsPromise;
 }
 
+async function pruneDeletedPosts(cache) {
+  const live = new Set();
+  let page = 1;
+  while (true) {
+    let res;
+    try {
+      res = await wpFetch(`${WP_BASE_URL}/posts?per_page=100&page=${page}&_fields=id`);
+    } catch {
+      return 0; // نتونستیم تأیید کنیم → کش دست‌نخورده می‌مونه
+    }
+    if (!res.ok) {
+      if (res.status === 400 && page > 1) break; // بعد از آخرین صفحه
+      return 0;
+    }
+    let batch;
+    try { batch = await res.json(); } catch { return 0; }
+    if (!Array.isArray(batch)) return 0;
+    batch.forEach((p) => live.add(String(p.id)));
+    if (batch.length < 100) break;
+    page++;
+  }
+  // لیست خالی ولی کش پر؟ مشکوکه (مثلاً وردپرس موقتاً خراب بوده) — چیزی پاک نکن.
+  if (live.size === 0) return 0;
+  let removed = 0;
+  for (const id of Object.keys(cache.posts)) {
+    if (!live.has(String(id))) { delete cache.posts[id]; removed++; }
+  }
+  return removed;
+}
+
 async function fetchAllPostsIncremental() {
   // حالت تست سرعت (WP_POST_LIMIT): کش رو کاملاً نادیده می‌گیریم و فقط
   // همین تعداد مقاله رو تازه می‌گیریم — تا نتیجه‌ی build همیشه دقیقاً
@@ -167,7 +211,8 @@ async function fetchAllPostsIncremental() {
 
   const cache = loadCache();
   const sinceParam = cache.fetchedAt ? `&modified_after=${encodeURIComponent(cache.fetchedAt)}` : "";
-  const newFetchedAt = new Date().toISOString();
+  // ۵ دقیقه هم‌پوشانی: اگه ساعت این ماشین با سرور وردپرس کمی فرق داشته باشه، مقاله‌ای جا نمی‌افته.
+  const newFetchedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
   let page = 1;
   const perPage = 30;
@@ -189,6 +234,13 @@ async function fetchAllPostsIncremental() {
   // فقط وقتی همه‌چیز بدون خطا تموم شد، تاریخ رو آپدیت می‌کنیم — اگه
   // یه‌جای وسط throw بشه، تاریخ قدیمی می‌مونه و دفعه‌ی بعد از همون‌جا
   // دوباره تلاش می‌شه (نه اینکه چیزی گم بشه).
+  // مقاله‌ای که توی وردپرس حذف یا پیش‌نویس شده، با modified_after پیدا نمی‌شه؛
+  // پس فقط لیست idها (خیلی سبک) رو می‌گیریم و موارد حذف‌شده رو از کش پاک می‌کنیم.
+  if (cache.fetchedAt) {
+    const removed = await pruneDeletedPosts(cache);
+    if (removed > 0) console.log(`[wp.js] ${removed} مقاله‌ی حذف‌شده از کش پاک شد.`);
+  }
+
   cache.fetchedAt = newFetchedAt;
   saveCache(cache);
 
@@ -359,5 +411,3 @@ function decodeEntities(str) {
     .replace(/&hellip;/g, "…")
     .replace(/&#8230;/g, "…");
     }
-
-    
